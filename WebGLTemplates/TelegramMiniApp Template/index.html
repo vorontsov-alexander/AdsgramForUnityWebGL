@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0" />
+    <title>Clicker</title>
+    <script src="./Build/telegram-web-app.js"></script>
+    <script src="./Build/sad.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        }
+        #unity-container {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+        #unity-canvas {
+            width: 100%;
+            height: 100%;
+            outline: none;
+            background: #000;
+            touch-action: none;
+        }
+        #loader-overlay {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(#222, #000);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 9999;
+        }
+        #loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #fff;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+            box-shadow: 0 0 0 7px rgba(34, 60, 80, 0.2);
+        }
+        #loader-text {
+            font-size: 14px;
+            opacity: 0.8;
+            letter-spacing: 0.05em;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #debug-console {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            max-height: 35vh;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 10px;
+            line-height: 1.4;
+            padding: 6px 8px 24px;
+            overflow-y: auto;
+            z-index: 10000;
+            box-shadow: 0 0 8px rgba(0,255,0,0.4);
+        }
+        #debug-console.hidden {
+            display: none;
+        }
+        #debug-toggle {
+            position: fixed;
+            right: 8px;
+            bottom: 8px;
+            z-index: 10001;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            line-height: 1.2;
+            border: 1px solid #0f0;
+            border-radius: 4px;
+            padding: 4px 6px;
+            box-shadow: 0 0 6px rgba(0,255,0,0.5);
+        }
+        #debug-toggle:active {
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+<div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+</div>
+<div id="loader-overlay">
+    <div id="loader-spinner"></div>
+    <div id="loader-text">Loading...</div>
+</div>
+<!-- 
+<div id="debug-console" class="hidden"></div>
+<button id="debug-toggle">LOG</button>
+-->
+
+<script>
+    const CACHE_VERSION = "2025-11-02-v7"
+    const REWARDED_BLOCK_ID = "17072"
+    const INTERSTITIAL_BLOCK_ID = "int-17073"
+
+    /*const $logBox = document.getElementById("debug-console")
+    const $toggle = document.getElementById("debug-toggle")
+
+    function appendLog(prefix, args) {
+        const line = document.createElement("div")
+        line.textContent = prefix + " " + Array.from(args).map(a => {
+            try { return typeof a === "object" ? JSON.stringify(a) : String(a) }
+            catch(e) { return String(a) }
+        }).join(" ")
+        $logBox.appendChild(line)
+        $logBox.scrollTop = $logBox.scrollHeight
+    }
+
+    const rawLog = console.log
+    const rawWarn = console.warn
+    const rawErr = console.error
+    console.log = function() { appendLog("[LOG]", arguments); rawLog.apply(console, arguments) }
+    console.warn = function() { appendLog("[WARN]", arguments); rawWarn.apply(console, arguments) }
+    console.error = function() { appendLog("[ERR]", arguments); rawErr.apply(console, arguments) }
+    console.log("[Init] Debug console ready")
+    $toggle.addEventListener("click", () => $logBox.classList.toggle("hidden"), { passive: true })
+*/
+    function pickSafeDPR() {
+        const real = window.devicePixelRatio || 1
+        const ua = navigator.userAgent || ""
+        const isIphone = /iPhone|iPad|iPod/i.test(ua)
+        const isAndroid = /Android/i.test(ua)
+        const isTelegramDesktop = /TelegramDesktop/i.test(ua)
+        const isDesktop = !/Mobile/i.test(ua) || isTelegramDesktop
+        if (isDesktop) return Math.min(real, 1.5)
+        if (isIphone) {
+            if (real >= 3) return 2.5
+            if (real >= 2) return 2
+            return 1.5
+        }
+        if (isAndroid) {
+            if (real >= 3) return 2
+            if (real >= 2) return 2
+            return 1.25
+        }
+        return Math.min(real, 2)
+    }
+
+    function withVer(url) { return url + "?v=" + CACHE_VERSION }
+
+    (function handleCacheVersion() {
+        const KEY = "CACHE_VERSION"
+        const stored = localStorage.getItem(KEY)
+        if (stored !== CACHE_VERSION) {
+            console.log("[Cache] Clearing old cache for new version:", CACHE_VERSION)
+            if ('caches' in window) caches.keys().then(keys => keys.forEach(k => caches.delete(k)))
+            if (indexedDB && indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => {
+                if (db.name && db.name.match(/UnityCache|AssetStorage|Cache/i)) indexedDB.deleteDatabase(db.name)
+            }))
+            localStorage.setItem(KEY, CACHE_VERSION)
+        } else console.log("[Cache] Version OK:", CACHE_VERSION)
+    })()
+
+    let tg = null
+    if (window.Telegram && window.Telegram.WebApp) {
+        tg = window.Telegram.WebApp
+        console.log("[TG] Telegram WebApp object found")
+        try { tg.expand(); tg.ready() } catch(e) { console.warn("[TG] tg.expand() failed:", e) }
+    } else console.log("[TG] Not Telegram environment")
+
+    let rewardedCtrl = null
+    let interstitialCtrl = null
+
+    function initAdsgram() {
+        console.log("[Ads] initAdsgram start")
+        if (!window.Adsgram) { console.warn("[Ads] AdsGram SDK not found"); return }
+        rewardedCtrl = Adsgram.init({ blockId: REWARDED_BLOCK_ID })
+        interstitialCtrl = Adsgram.init({ blockId: INTERSTITIAL_BLOCK_ID })
+        console.log("[Ads] AdsGram controllers ready")
+    }
+
+    window.ShowRewardedAd = function () {
+        if (!rewardedCtrl) {
+            if (window.unityInstance)
+                window.unityInstance.SendMessage("AdManager", "OnRewardedError", "not_ready");
+            return;
+        }
+
+        rewardedCtrl.show()
+            .then((result) => {
+                if (window.unityInstance)
+                    window.unityInstance.SendMessage("AdManager", "OnRewardedSuccess");
+            })
+            .catch((result) => {
+                if (window.unityInstance)
+                    window.unityInstance.SendMessage(
+                        "AdManager",
+                        "OnRewardedError",
+                        String(result && result.description ? result.description : "error")
+                    );
+            });
+    };
+
+    window.ShowInterstitialAd = function () {
+        if (!interstitialCtrl) {
+            if (window.unityInstance)
+                window.unityInstance.SendMessage("AdManager", "OnInterstitialError", "not_ready");
+            return;
+        }
+
+        interstitialCtrl.show()
+            .then((result) => {
+                if (window.unityInstance)
+                    window.unityInstance.SendMessage("AdManager", "OnInterstitialSuccess");
+            })
+            .catch((result) => {
+                if (window.unityInstance)
+                    window.unityInstance.SendMessage(
+                        "AdManager",
+                        "OnInterstitialError",
+                        String(result && result.description ? result.description : "error")
+                    );
+            });
+    };
+
+
+    const canvas = document.getElementById("unity-canvas")
+    const loaderOverlay = document.getElementById("loader-overlay")
+    const loaderText = document.getElementById("loader-text")
+    const chosenDPR = pickSafeDPR()
+    console.log("[Render] real DPR =", window.devicePixelRatio, "chosen =", chosenDPR)
+
+    const buildUrl = "Build"
+    const config = {
+        dataUrl: withVer(buildUrl + "/hueta.data"),
+        frameworkUrl: withVer(buildUrl + "/hueta.framework.js"),
+        codeUrl: withVer(buildUrl + "/hueta.wasm"),
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "KlickerYand",
+        productVersion: "1.0",
+        cacheControl: function (url) { return "must-revalidate" },
+        autoSyncPersistentDataPath: true,
+        devicePixelRatio: chosenDPR
+    }
+
+    const unityLoaderScript = document.createElement("script")
+    unityLoaderScript.src = withVer(buildUrl + "/hueta.loader.js")
+    unityLoaderScript.onload = () => {
+        console.log("[Unity] loader loaded")
+        createUnityInstance(canvas, config, (progress) => {
+            const percent = Math.round(progress * 100)
+            loaderText.textContent = "Loading... " + percent + "%"
+        }).then((instance) => {
+            window.unityInstance = instance
+            loaderOverlay.style.display = "none"
+            console.log("[Unity] Loaded")
+            initAdsgram()
+        }).catch((message) => {
+            console.error("[Unity] failed to load:", message)
+            loaderText.textContent = "Load error. Tap to retry."
+            loaderOverlay.style.display = "flex"
+            loaderOverlay.addEventListener("click", () => location.reload(), { once: true })
+        })
+    }
+    document.body.appendChild(unityLoaderScript)
+</script>
+</body>
+</html>
