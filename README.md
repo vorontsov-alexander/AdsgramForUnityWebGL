@@ -7,7 +7,7 @@
 
 ---
 
-## 🇬🇧 English
+## 🇬🇧 
 
 **AdsgramForUnityWebGL** — a Unity plugin that allows you to easily integrate **Adsgram** ads into your WebGL games.
 
@@ -21,9 +21,7 @@
 
 ### ⚙️ Installation
 
-1. Download the `.unitypackage` file and import it into your Unity project:  
-   **Assets → Import Package → Custom Package...**
-
+1. Download the Zip and move the files into the project folder.
 2. Add the prefab named **`AdManager`** to your scene.  
 3. Download and place the following files into your build folder (`Build/`):
    - `telegram-web-app.js` — Telegram Web App API  
@@ -107,7 +105,7 @@ Works with Telegram Web Apps
 This project is licensed under the MIT License.
 See the LICENSE file for details.
 
-🇷🇺 Русский
+## 🇷🇺
 AdsgramForUnityWebGL — это плагин для Unity, который позволяет легко интегрировать рекламу Adsgram в ваши WebGL-игры.
 
 🚀 Возможности
@@ -120,8 +118,7 @@ AdsgramForUnityWebGL — это плагин для Unity, который поз
 Простая настройка через префаб и JS API
 
 ⚙️ Установка
-Скачайте файл .unitypackage и импортируйте его в проект Unity:
-Assets → Import Package → Custom Package...
+Скачайте Zip и перекиньте файлы в папку проекта
 
 Добавьте на сцену префаб с названием AdManager.
 
